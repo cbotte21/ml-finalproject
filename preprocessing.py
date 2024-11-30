@@ -1,40 +1,32 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
-
-def convert(df):
+def convert(df:pd.DataFrame):
     """
     Converts dataframe to vw-readable format
     """
-    vw_data = [f"{row['rating']} |user {row['userId']} |movie {row['movieId']}" for _, row in df.iterrows()]
+    vw_data = (df['rating'].astype(str) + ' |user ' + df['userId'].astype(str) + ' |movie ' + df['movieId'].astype(str)).tolist()
     return vw_data
 
-def split(file, n_ratings=5):
+def split(df:pd.DataFrame, training_size:float=None, n_ratings:int=5, randomstate:int=None):
     """
-    Converts a csv file into two dataframes, one as testing, the other as training+validation
-    :param file: ratings.csv
+    Splits the dataframe such that for each user, we remove n_ratings and place those ratings inside dataframe2
+    :param df: dataframe
     :param n_ratings: number of ratings from each user to remove
-    :return: testing dataframe, training+validation dataframe
+    :param training_size: creates a split using a portion of each user's rating set
+    :param randomstate: for reproducibility during model selection
+    :return: training:dataframe, testing:dataframe
     """
-    df = pd.read_csv(file)
-    max_n_ratings = np.min(df.value_counts(subset="userId"))
-
-    assert(n_ratings < max_n_ratings), (f"Number of ratings {n_ratings} to remove "
-                                        f"is greater than a user's number of ratings {max_n_ratings}"
+    df = df.sample(frac=1, random_state=randomstate, ignore_index=True)
+    users = df.groupby("userId", group_keys=False)
+    if training_size is None:
+        max_n_ratings = np.min(df.value_counts(subset="userId"))
+        assert(n_ratings < max_n_ratings), (f"Number of ratings {n_ratings} to remove "
+                                        f"is greater than some user's number of ratings {max_n_ratings}"
                                         )
-    groups = df.groupby(["userId"])
-    train_df = groups.tail(n_ratings)
-    test_df = groups.
-    print(groups.tail(n_ratings))
-
-def main():
-    split("ratings.csv")
-
-
-if __name__ == "__main__":
-    main()
-
-
-
-
+        df1 = users.apply(lambda group: group.head(-n_ratings)).reset_index(drop=True)
+        df2 = users.tail(n_ratings)
+    else:
+        df2 = users.apply(lambda group: group.head(-(int(len(group) * training_size))))
+        df1 = users.apply(lambda group: group.tail(int(len(group) * training_size)))
+    return df1, df2
